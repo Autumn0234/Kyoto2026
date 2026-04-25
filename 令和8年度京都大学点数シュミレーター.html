@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>京都大学 理系合格ラインシミュレーター（傾斜配点自動計算）</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; max-width: 1000px; margin: 20px auto; padding: 20px; background-color: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1, h2 { color: #004488; border-bottom: 2px solid #004488; }
+        .input-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        label { display: block; font-weight: bold; font-size: 0.9em; }
+        input { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #004488; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 1.1em; width: 100%; }
+        button:hover { background: #003366; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background: #eef5ff; }
+        .diff-plus { color: blue; font-weight: bold; }
+        .diff-minus { color: red; font-weight: bold; }
+        .note { font-size: 0.8em; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<h1>令和8年度京都大学 点数シミュレーター（理系）</h1>
+
+<div class="card">
+    <h2>1. 素点入力</h2>
+    <p><strong>共通テスト (素点)</strong> ※実際の得点を入力</p>
+    <div class="input-group">
+        <div><label>国語 (200)</label><input type="number" id="ct_ja" value="148"></div>
+        <div><label>社会 (100)</label><input type="number" id="ct_so" value="85"></div>
+        <div><label>数学 (200)</label><input type="number" id="ct_ma" value="196"></div>
+        <div><label>理科 (200)</label><input type="number" id="ct_sc" value="187"></div>
+        <div><label>英語 (200)</label><input type="number" id="ct_en" value="165"></div>
+        <div><label>情報 (100)</label><input type="number" id="ct_in" value="88"></div>
+    </div>
+    <p><strong>二次試験 (京大模試などの標準素点)</strong></p>
+    <div class="input-group">
+        <div><label>国語 (100満点換算)</label><input type="number" id="sc_ja" value="51"></div>
+        <div><label>数学 (200満点換算)</label><input type="number" id="sc_ma" value="120"></div>
+        <div><label>理科 (200満点換算)</label><input type="number" id="sc_sc" value="148"></div>
+        <div><label>英語 (150満点換算)</label><input type="number" id="sc_en" value="72"></div>
+    </div>
+    <button onclick="calculate()">自動傾斜計算・判定する</button>
+</div>
+
+<div class="card">
+    <h2>2. 判定結果</h2>
+    <div id="resultArea"></div>
+</div>
+
+<script>
+// ==========================================
+// 【データ設定エリア】
+// ==========================================
+const facultyData = [
+    { 
+        name: "総合人間学部(理)", 
+        ct_weight: { ja: 0, ma: 0, en: 0, sc: 0, so: 1, in: 0.25 }, 
+        sc_weight: { ja: 1.5, ma: 1.0, en: 1.0, sc: 1.0 },
+        min_score: 454.00,
+        ave_score: 500.71,
+        max_score: 583.50,
+        total_max: 825
+    },
+    { 
+        name: "経済学部(理)", 
+        ct_weight: { ja: 0.25, ma: 0.25, en: 0.25, sc: 0.25, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.5, ma: 1.5, en: 1.33, sc: 0 },
+        min_score: 555.62,
+        ave_score: 603.06,
+        max_score: 669.87,
+        total_max: 950
+    },
+    { 
+        name: "理学部", 
+        ct_weight: { ja: 0.25, ma: 0.25, en: 0.25, sc: 0.25, so: 0.25, in: 0.25 }, 
+        sc_weight: { ja: 1.5, ma: 1.5, en: 1.5, sc: 1.5 },
+        min_score: 730.25,
+        ave_score: 800.41,
+        max_score: 996.00,
+        total_max: 1225
+    },
+    { 
+        name: "医学部医学科", 
+        ct_weight: { ja: 0.25, ma: 0.25, en: 0.25, sc: 0.25, so: 0.5, in: 0.25 }, 
+        sc_weight: { ja: 2.0, ma: 1.25, en: 2.0, sc: 1.5 },
+        min_score: 876.62,
+        ave_score: 940.75,
+        max_score: 1098.25,
+        total_max: 1275
+    },
+    { 
+        name: "医学部人間健康科学科", 
+        ct_weight: { ja: 0.25, ma: 0.25, en: 0.25, sc: 0.25, so: 0.5, in: 0.25 }, 
+        sc_weight: { ja: 1.5, ma: 1.0, en: 1.33, sc: 1.0 },
+        min_score: 518.50,
+        ave_score: 561.91,
+        max_score: 674.16,
+        total_max: 1025
+    },
+    { 
+        name: "薬学部", 
+        ct_weight: { ja: 0.2, ma: 0.2, en: 0.2, sc: 0.2, so: 0.4, in: 0.2 }, 
+        sc_weight: { ja: 1.0, ma: 1.0, en: 1.33, sc: 1.0 },
+        min_score: 512.06,
+        ave_score: 566.09,
+        max_score: 685.10,
+        total_max: 920
+    },
+    { 
+        name: "工学部地球工学科", 
+        ct_weight: { ja: 0.125, ma: 0.125, en: 0.25, sc: 0.125, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.0, ma: 1.25, en: 1.33, sc: 1.25 },
+        min_score: 581.20,
+        ave_score: 612.79,
+        max_score: 789.20,
+        total_max: 1025
+    },
+    { 
+        name: "工学部建築学科", 
+        ct_weight: { ja: 0.125, ma: 0.125, en: 0.25, sc: 0.125, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.0, ma: 1.25, en: 1.33, sc: 1.25 },
+        min_score: 596.32,
+        ave_score: 639.63,
+        max_score: 743.70,
+        total_max: 1025
+    },
+    { 
+        name: "工学部物理工学科", 
+        ct_weight: { ja: 0.125, ma: 0.125, en: 0.25, sc: 0.125, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.0, ma: 1.25, en: 1.33, sc: 1.25 },
+        min_score: 615.33,
+        ave_score: 656.43,
+        max_score: 743.75,
+        total_max: 1025
+    },
+    { 
+        name: "工学部電気電子工学科", 
+        ct_weight: { ja: 0.125, ma: 0.125, en: 0.25, sc: 0.125, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.0, ma: 1.25, en: 1.33, sc: 1.25 },
+        min_score: 602.15,
+        ave_score: 640.52,
+        max_score: 740.32,
+        total_max: 1025
+    },
+    { 
+        name: "工学部情報学科", 
+        ct_weight: { ja: 0.125, ma: 0.125, en: 0.25, sc: 0.125, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.0, ma: 1.25, en: 1.33, sc: 1.25 },
+        min_score: 645.49,
+        ave_score: 694.29,
+        max_score: 822.62,
+        total_max: 1025
+    },
+    { 
+        name: "工学部理工化学科", 
+        ct_weight: { ja: 0.125, ma: 0.125, en: 0.25, sc: 0.125, so: 0.5, in: 0.5 }, 
+        sc_weight: { ja: 1.0, ma: 1.25, en: 1.33, sc: 1.25 },
+        min_score: 581.15,
+        ave_score: 612.41,
+        max_score: 769.12,
+        total_max: 1025
+    },
+    { 
+        name: "農学部", 
+        ct_weight: { ja: 0.35, ma: 0.25, en: 0.25, sc: 0.25, so: 1.0, in: 0.3 }, 
+        sc_weight: { ja: 1.0, ma: 1.0, en: 1.33, sc: 1.0 },
+        min_score: 629.98,
+        ave_score: 675.58,
+        max_score: 787.40,
+        total_max: 1050
+    }
+];
+
+// 数値のフォーマットと色付けを行う補助関数
+function formatDifference(score, target) {
+    if (target === undefined || target === null) return "<td>-</td>";
+    let diff = (score - target).toFixed(1);
+    let isPlus = diff >= 0;
+    let sign = isPlus ? '+' : '';
+    let className = isPlus ? 'diff-plus' : 'diff-minus';
+    return `<td class="${className}">${sign}${diff}</td>`;
+}
+
+function calculate() {
+    const ct = {
+        ja: Number(document.getElementById('ct_ja').value),
+        ma: Number(document.getElementById('ct_ma').value),
+        en: Number(document.getElementById('ct_en').value),
+        sc: Number(document.getElementById('ct_sc').value),
+        so: Number(document.getElementById('ct_so').value),
+        in: Number(document.getElementById('ct_in').value)
+    };
+    const sc = {
+        ja: Number(document.getElementById('sc_ja').value),
+        ma: Number(document.getElementById('sc_ma').value),
+        en: Number(document.getElementById('sc_en').value),
+        sc: Number(document.getElementById('sc_sc').value)
+    };
+
+    let html = `<table>
+        <thead>
+            <tr>
+                <th>理系学部</th>
+                <th>換算後得点 / 満点</th>
+                <th>最低点との差</th>
+                <th>平均点との差</th>
+                <th>最高点との差</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    facultyData.forEach(f => {
+        // 共通テストの傾斜計算
+        let ct_calc = (ct.ja * f.ct_weight.ja) + (ct.ma * f.ct_weight.ma) + 
+                      (ct.en * f.ct_weight.en) + (ct.sc * f.ct_weight.sc) + 
+                      (ct.so * f.ct_weight.so) + (ct.in * f.ct_weight.in);
+        
+        // 二次試験の傾斜計算
+        let sc_calc = (sc.ja * f.sc_weight.ja) + (sc.ma * f.sc_weight.ma) + 
+                      (sc.en * f.sc_weight.en) + (sc.sc * f.sc_weight.sc);
+
+        let myTotal = (ct_calc + sc_calc).toFixed(1);
+
+        html += `<tr>
+            <td>${f.name}</td>
+            <td>${myTotal} / ${f.total_max}</td>
+            ${formatDifference(myTotal, f.min_score)}
+            ${formatDifference(myTotal, f.ave_score)}
+            ${formatDifference(myTotal, f.max_score)}
+        </tr>`;
+    });
+
+    html += `</tbody></table><p class="note">※二次試験の素点は、標準配点（国100, 数200, 理200 , 英250）を入力してください。</p>`;
+    document.getElementById('resultArea').innerHTML = html;
+}
+</script>
+</body>
+</html>
